@@ -1,0 +1,22 @@
+[server]
+port = 8501
+address = "0.0.0.0"
+enableCORS = true
+enableXsrfProtection = true
+maxUploadSize = 200
+maxMessageSize = 200
+enableWebsocketCompression = true
+
+[browser]
+serverAddress = "localhost"
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#2193b0"
+backgroundColor = "#f5f7fa"
+secondaryBackgroundColor = "#e4e7eb"
+textColor = "#232F3E"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = true
