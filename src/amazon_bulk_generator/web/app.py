@@ -331,13 +331,16 @@ class BulkCampaignApp:
         st.title("Amazon Ads Bulk Campaign Generator 🎯")
         st.markdown("Create properly formatted bulk sheets for Amazon Sponsored Products campaigns")
         
-        # Initialize session state
-        if 'step' not in st.session_state:
-            st.session_state['step'] = 1
-            st.session_state['keywords'] = []
-            st.session_state['skus'] = []
-            st.session_state['keyword_group_size'] = None
-            st.session_state['sku_group_size'] = None
+        # Initialize all required session state keys
+        for key in ['step', 'keywords', 'skus', 'keyword_group_size', 'sku_group_size']:
+            if key not in st.session_state:
+                st.session_state[key] = {
+                    'step': 1,
+                    'keywords': [],
+                    'skus': [],
+                    'keyword_group_size': None,
+                    'sku_group_size': None
+                }.get(key)
         
         # Create two columns for Step 1
         if st.session_state['step'] == 1:
