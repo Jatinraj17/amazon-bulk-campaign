@@ -7,20 +7,6 @@ from typing import Dict, Any, Tuple, List
 import re
 import json
 
-import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
-
-from amazon_bulk_generator.core.generator import BulkSheetGenerator, CampaignSettings
-import streamlit as st
-import pandas as pd
-from datetime import datetime
-import logging
-import os
-from typing import Dict, Any, Tuple, List
-import re
-from streamlit_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-
 from amazon_bulk_generator.core.generator import BulkSheetGenerator, CampaignSettings
 from amazon_bulk_generator.core.validators import (
     validate_keywords,
@@ -45,58 +31,6 @@ class BulkCampaignApp:
             initial_sidebar_state="collapsed"  # Collapse sidebar for faster loading
         )
         
-        # Default credentials configuration
-        default_config = {
-            'credentials': {
-                'usernames': {
-                    'admin': {
-                        'email': 'admin@ecommercean.com',
-                        'name': 'Admin User',
-                        'password': '$2b$12$7YxQmLSXJxjBHwYeGNWQO.KF3zXcPjnQB8YQstAI8Tp/Hr8ldnZeO'  # hashed 'admin123'
-                    }
-                }
-            },
-            'cookie': {
-                'expiry_days': 30,
-                'key': 'amazon_bulk_campaign_key',
-                'name': 'amazon_bulk_campaign_cookie'
-            },
-            'preauthorized': {
-                'emails': ['admin@ecommercean.com']
-            }
-        }
-
-        # Load credentials from Streamlit secrets
-        try:
-            credentials_json = st.secrets["authentication"]["credentials"]
-            credentials = json.loads(credentials_json)
-            cookie_name = st.secrets["authentication"]["cookie_name"]
-            cookie_key = st.secrets["authentication"]["cookie_key"]
-            cookie_expiry_days = st.secrets["authentication"]["cookie_expiry_days"]
-            preauthorized = {"emails": st.secrets["authentication"]["preauthorized_emails"]}
-            self.credentials = {
-                "credentials": credentials,
-                "cookie": {
-                    "name": cookie_name,
-                    "key": cookie_key,
-                    "expiry_days": cookie_expiry_days
-                },
-                "preauthorized": preauthorized
-            }
-            logger.info("Loaded credentials from Streamlit secrets")
-        except Exception as e:
-            logger.error(f"Error loading credentials from secrets: {str(e)}")
-            self.credentials = default_config
-
-        # Initialize authenticator
-        self.authenticator = stauth.Authenticate(
-            self.credentials['credentials'],
-            self.credentials['cookie']['name'],
-            self.credentials['cookie']['key'],
-            self.credentials['cookie']['expiry_days'],
-            self.credentials['preauthorized']
-        )
-        
         # Cache expensive object initializations
         if 'generator' not in st.session_state:
             st.session_state.generator = BulkSheetGenerator()
@@ -118,7 +52,8 @@ class BulkCampaignApp:
         input_method = st.radio(
             "Choose input method for keywords:",
             ["Type/Paste", "Upload CSV"],
-            help="Select how you want to input your keywords"
+            help="Select how you want to input your keywords",
+            key="keywords_input_method"
         )
         
         keywords = []
@@ -127,13 +62,14 @@ class BulkCampaignApp:
         
         if input_method == "Type/Paste":
             sample_data = self.file_handler.load_template_data('keywords')
-            use_sample = st.checkbox("Load sample keywords")
+            use_sample = st.checkbox("Load sample keywords", key="use_sample_keywords")
             
             keyword_text = st.text_area(
                 "Enter keywords",
                 value=sample_data if use_sample else "",
                 height=150,
-                help="Enter keywords (one per line or comma-separated)"
+                help="Enter keywords (one per line or comma-separated)",
+                key="keyword_text_input"
             )
             
             if keyword_text:
@@ -141,7 +77,8 @@ class BulkCampaignApp:
         else:
             keyword_file = st.file_uploader(
                 "Upload keywords CSV",
-                type=['csv']
+                type=['csv'],
+                key="keyword_file_upload"
             )
             if keyword_file:
                 try:
@@ -160,7 +97,8 @@ class BulkCampaignApp:
                 
                 enable_grouping = st.checkbox(
                     "Enable keyword grouping",
-                    help="Group multiple keywords into a single campaign"
+                    help="Group multiple keywords into a single campaign",
+                    key="enable_keyword_grouping"
                 )
                 
                 if enable_grouping:
@@ -168,7 +106,8 @@ class BulkCampaignApp:
                         "Keywords per group",
                         min_value=1,
                         max_value=len(keywords),
-                        value=min(3, len(keywords))
+                        value=min(3, len(keywords)),
+                        key="keyword_group_size"
                     )
                     
                     if group_size:
@@ -185,7 +124,8 @@ class BulkCampaignApp:
         input_method = st.radio(
             "Choose input method for SKUs:",
             ["Type/Paste", "Upload CSV"],
-            help="Select how you want to input your SKUs"
+            help="Select how you want to input your SKUs",
+            key="skus_input_method"
         )
         
         skus = []
@@ -194,13 +134,14 @@ class BulkCampaignApp:
         
         if input_method == "Type/Paste":
             sample_data = self.file_handler.load_template_data('skus')
-            use_sample = st.checkbox("Load sample SKUs")
+            use_sample = st.checkbox("Load sample SKUs", key="use_sample_skus")
             
             sku_text = st.text_area(
                 "Enter SKUs",
                 value=sample_data if use_sample else "",
                 height=150,
-                help="Enter SKUs (one per line or comma-separated)"
+                help="Enter SKUs (one per line or comma-separated)",
+                key="sku_text_input"
             )
             
             if sku_text:
@@ -208,7 +149,8 @@ class BulkCampaignApp:
         else:
             sku_file = st.file_uploader(
                 "Upload SKUs CSV",
-                type=['csv']
+                type=['csv'],
+                key="sku_file_upload"
             )
             if sku_file:
                 try:
@@ -227,7 +169,8 @@ class BulkCampaignApp:
                 
                 enable_grouping = st.checkbox(
                     "Enable SKU grouping",
-                    help="Group multiple SKUs into a single campaign"
+                    help="Group multiple SKUs into a single campaign",
+                    key="enable_sku_grouping"
                 )
                 
                 if enable_grouping:
@@ -235,7 +178,8 @@ class BulkCampaignApp:
                         "SKUs per group",
                         min_value=1,
                         max_value=len(skus),
-                        value=min(3, len(skus))
+                        value=min(3, len(skus)),
+                        key="sku_group_size"
                     )
                     
                     if group_size:
@@ -246,6 +190,65 @@ class BulkCampaignApp:
                                 st.write("\n".join(group))
         
         return skus, has_error, group_size
+
+    def get_campaign_settings(self) -> Tuple[Dict[str, Any], bool]:
+        """Get and validate campaign settings"""
+        has_error = False
+        settings = {}
+        
+        # Create columns for settings
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            daily_budget = st.number_input(
+                "Daily Budget ($)",
+                min_value=1.0,
+                value=10.0,
+                help="Minimum daily budget is $1.00",
+                key="daily_budget"
+            )
+            
+            start_date = st.date_input(
+                "Campaign Start Date",
+                min_value=datetime.today(),
+                help="Choose when your campaign should start",
+                key="start_date"
+            )
+        
+        with col2:
+            match_types = st.multiselect(
+                "Select Match Types",
+                ["exact", "phrase", "broad"],
+                default=["exact"],
+                key="match_types"
+            )
+            
+            bids = {}
+            for match_type in match_types:
+                bids[match_type] = st.number_input(
+                    f"Default bid for {match_type} match ($)",
+                    min_value=0.02,
+                    value=0.75,
+                    key=f"bid_{match_type}"
+                )
+        
+        # Create settings dictionary
+        settings = {
+            'campaign_name_template': "SP_[SKU]_match_type",
+            'ad_group_name_template': "AG_[SKU]_match_type",
+            'daily_budget': daily_budget,
+            'start_date': start_date,
+            'match_types': match_types,
+            'bids': bids
+        }
+        
+        # Validate settings
+        valid, error = validate_campaign_settings(settings)
+        if not valid:
+            st.error(error)
+            has_error = True
+        
+        return settings, has_error
 
     def _display_bulk_sheet_results(self, df: pd.DataFrame):
         """Display bulk sheet results including download buttons and preview"""
@@ -263,7 +266,8 @@ class BulkCampaignApp:
                         "Download Excel File",
                         f.read(),
                         file_name=os.path.basename(excel_path),
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_excel"
                     )
             
             with col2:
@@ -272,7 +276,8 @@ class BulkCampaignApp:
                         "Download CSV File",
                         f.read(),
                         file_name=os.path.basename(csv_path),
-                        mime="text/csv"
+                        mime="text/csv",
+                        key="download_csv"
                     )
             
             st.markdown("### 🔍 Preview")
@@ -322,84 +327,9 @@ class BulkCampaignApp:
         logger.info("Starting application")
         logger.info(f"Current session state: {st.session_state}")
         
-        # Show login page if not authenticated
-        if not st.session_state.get('authentication_status'):
-            logger.info("User not authenticated, showing login page")
-            st.markdown("""
-            ### Welcome to Amazon Ads Bulk Campaign Generator! 👋
-            
-            Choose one of the options below:
-            - **Existing Users**: Use the "Login" tab to access your account
-            - **New Users**: Use the "Register" tab to request access
-            - **Admin Access**: Use username `admin` to manage users and approve registrations
-            """)
-            
-            tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
-            
-            with tab1:
-                st.markdown("""
-                #### Login
-                If you already have an account or are an admin, please log in below.
-                
-                **Admin Login:**
-                - Username: `admin`
-                - Password: Contact system administrator
-                """)
-                
-                name, authentication_status, username = self.authenticator.login("Enter your credentials", "main")
-                logger.info(f"Login attempt - Status: {authentication_status}, Username: {username}")
-                
-                if authentication_status is False:
-                    logger.warning("Login failed - incorrect credentials")
-                    st.error('Username/password is incorrect')
-                elif authentication_status is None:
-                    logger.info("No login attempt yet")
-                    st.info('Please enter your credentials to access the app')
-                else:
-                    logger.info(f"Successful login for user: {username}")
-                    st.session_state['authentication_status'] = authentication_status
-                    st.session_state['name'] = name
-                    st.session_state['username'] = username
-                    st.rerun()
-            
-            with tab2:
-                self.show_registration_page()
-            
-            return
-        
-        # If authenticated, show logout in sidebar and welcome message
-        st.sidebar.success(f'Welcome *{st.session_state["name"]}*')
-        if self.authenticator.logout('Logout', 'sidebar'):
-            logger.info("User logged out")
-            st.rerun()
-        
-        # Admin features
-        if st.session_state['username'] == 'admin':
-            st.sidebar.markdown("---")
-            if st.sidebar.button("User Management"):
-                st.session_state['show_user_management'] = True
-                st.rerun()
-            if st.sidebar.button("Pending Approvals"):
-                st.session_state['show_approvals'] = True
-                st.rerun()
-        
-        # Show appropriate page based on state
-        if st.session_state.get('show_user_management', False) and st.session_state['username'] == 'admin':
-            self.show_user_management()
-            if st.sidebar.button("Back to Main App"):
-                st.session_state['show_user_management'] = False
-                st.rerun()
-        elif st.session_state.get('show_approvals', False) and st.session_state['username'] == 'admin':
-            self.show_pending_approvals()
-            if st.sidebar.button("Back to Main App"):
-                st.session_state['show_approvals'] = False
-                st.rerun()
-        else:
-            # Main app content
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.title("Amazon Ads Bulk Campaign Generator 🎯")
-                st.markdown("Create properly formatted bulk sheets for Amazon Sponsored Products campaigns")
+        # Main app content
+        st.title("Amazon Ads Bulk Campaign Generator 🎯")
+        st.markdown("Create properly formatted bulk sheets for Amazon Sponsored Products campaigns")
         
         # Initialize session state
         if 'step' not in st.session_state:
