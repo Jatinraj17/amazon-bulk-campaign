@@ -369,7 +369,8 @@ class BulkCampaignApp:
                             st.session_state['keywords'] = keywords
                             st.session_state['skus'] = skus
                             st.session_state['keyword_group_size'] = group_size
-                            st.session_state['sku_group_size'] = sku_group_size
+                            if sku_group_size is not None:
+                                st.session_state['sku_group_size'] = sku_group_size
                             st.session_state['step'] = 2
                             st.rerun()
         
