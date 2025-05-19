@@ -5,7 +5,11 @@ import logging
 import os
 from typing import Dict, Any, Tuple, List
 import re
-from streamlit_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+import json
+
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 
 from amazon_bulk_generator.core.generator import BulkSheetGenerator, CampaignSettings
 from amazon_bulk_generator.core.validators import (
@@ -23,26 +27,81 @@ logger = logging.getLogger(__name__)
 
 class BulkCampaignApp:
     def __init__(self):
-        self.generator = BulkSheetGenerator()
-        self.file_handler = FileHandler()
-        self.text_formatter = TextFormatter()
-        self.data_formatter = DataFormatter()
-        
-        self.part_mapping = {
-            "SKU": "[SKU]",
-            "AD TYPE": "SP",
-            "MATCH TYPE": "match_type",
-            "START DATE": "250423",
-            "ROOT GROUP": "[Root]",
-            "KEYWORD": "[KW]",
-            "AG": "AG"
-        }
-        
+        # Set page config first to avoid Streamlit warnings
         st.set_page_config(
             page_title="Amazon Ads Bulk Campaign Generator",
             page_icon="🎯",
-            layout="wide"
+            layout="wide",
+            initial_sidebar_state="collapsed"  # Collapse sidebar for faster loading
         )
+        
+        # Default credentials configuration
+        default_config = {
+            'credentials': {
+                'usernames': {
+                    'admin': {
+                        'email': 'admin@ecommercean.com',
+                        'name': 'Admin User',
+                        'password': '$2b$12$7YxQmLSXJxjBHwYeGNWQO.KF3zXcPjnQB8YQstAI8Tp/Hr8ldnZeO'  # hashed 'admin123'
+                    }
+                }
+            },
+            'cookie': {
+                'expiry_days': 30,
+                'key': 'amazon_bulk_campaign_key',
+                'name': 'amazon_bulk_campaign_cookie'
+            },
+            'preauthorized': {
+                'emails': ['admin@ecommercean.com']
+            }
+        }
+
+        # Load credentials from Streamlit secrets
+        try:
+            credentials_json = st.secrets["authentication"]["credentials"]
+            credentials = json.loads(credentials_json)
+            cookie_name = st.secrets["authentication"]["cookie_name"]
+            cookie_key = st.secrets["authentication"]["cookie_key"]
+            cookie_expiry_days = st.secrets["authentication"]["cookie_expiry_days"]
+            preauthorized = {"emails": st.secrets["authentication"]["preauthorized_emails"]}
+            self.credentials = {
+                "credentials": credentials,
+                "cookie": {
+                    "name": cookie_name,
+                    "key": cookie_key,
+                    "expiry_days": cookie_expiry_days
+                },
+                "preauthorized": preauthorized
+            }
+            logger.info("Loaded credentials from Streamlit secrets")
+        except Exception as e:
+            logger.error(f"Error loading credentials from secrets: {str(e)}")
+            self.credentials = default_config
+
+        # Initialize authenticator
+        self.authenticator = stauth.Authenticate(
+            self.credentials['credentials'],
+            self.credentials['cookie']['name'],
+            self.credentials['cookie']['key'],
+            self.credentials['cookie']['expiry_days'],
+            self.credentials['preauthorized']
+        )
+        
+        # Cache expensive object initializations
+        if 'generator' not in st.session_state:
+            st.session_state.generator = BulkSheetGenerator()
+        if 'file_handler' not in st.session_state:
+            st.session_state.file_handler = FileHandler()
+        if 'text_formatter' not in st.session_state:
+            st.session_state.text_formatter = TextFormatter()
+        if 'data_formatter' not in st.session_state:
+            st.session_state.data_formatter = DataFormatter()
+        
+        # Use session state references
+        self.generator = st.session_state.generator
+        self.file_handler = st.session_state.file_handler
+        self.text_formatter = st.session_state.text_formatter
+        self.data_formatter = st.session_state.data_formatter
 
     def get_keywords_input(self) -> Tuple[list, bool, int]:
         """Get and validate keywords input"""
@@ -111,7 +170,7 @@ class BulkCampaignApp:
         
         return keywords, has_error, group_size
 
-    def get_skus_input(self) -> Tuple[list, bool]:
+    def get_skus_input(self) -> Tuple[list, bool, int]:
         """Get and validate SKUs input"""
         input_method = st.radio(
             "Choose input method for SKUs:",
@@ -121,6 +180,7 @@ class BulkCampaignApp:
         
         skus = []
         has_error = False
+        group_size = None
         
         if input_method == "Type/Paste":
             sample_data = self.file_handler.load_template_data('skus')
@@ -154,189 +214,33 @@ class BulkCampaignApp:
                 has_error = True
             else:
                 st.success(f"Successfully loaded {len(skus)} SKUs")
-        
-        return skus, has_error
-
-    def _arrange_template_parts(self, title: str, available_parts: List[str], default_parts: List[str]) -> str:
-        """Create a user-friendly interface for arranging template parts"""
-        st.markdown(f"### 📝 {title}")
-        
-        # Initialize session state
-        key = f"{title}_selected_parts"
-        if key not in st.session_state:
-            st.session_state[key] = default_parts.copy()
-        
-        # Add custom text input
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            custom_text = st.text_input(
-                "Add custom text",
-                key=f"{title}_custom",
-                help="Only letters, numbers, hyphens, and underscores"
-            )
-        with col2:
-            if custom_text:
-                if not re.match(r'^[a-zA-Z0-9_-]+$', custom_text):
-                    st.error("Invalid characters")
-                elif st.button("Add", key=f"{title}_add_custom"):
-                    if custom_text not in st.session_state[key]:
-                        st.session_state[key].append(custom_text)
-                        st.rerun()
-
-        # Create tabs
-        tab1, tab2 = st.tabs(["Arrange Parts", "Add Parts"])
-        
-        with tab1:
-            st.markdown("##### Current Parts:")
-            selected_parts = st.session_state[key]
-            
-            # Create reorderable list
-            for i, part in enumerate(selected_parts):
-                col1, col2, col3 = st.columns([0.1, 0.8, 0.1])
-                with col1:
-                    if i > 0:
-                        if st.button("↑", key=f"{title}_up_{i}"):
-                            selected_parts[i], selected_parts[i-1] = selected_parts[i-1], selected_parts[i]
-                            st.rerun()
-                with col2:
-                    st.info(part)
-                with col3:
-                    if i < len(selected_parts) - 1:
-                        if st.button("↓", key=f"{title}_down_{i}"):
-                            selected_parts[i], selected_parts[i+1] = selected_parts[i+1], selected_parts[i]
-                            st.rerun()
-            
-            # Remove buttons
-            if selected_parts:
-                st.markdown("##### Remove parts:")
-                cols = st.columns(4)
-                for idx, part in enumerate(selected_parts):
-                    col_idx = idx % 4
-                    with cols[col_idx]:
-                        if st.button(f"❌ {part}", key=f"{title}_remove_{part}"):
-                            st.session_state[key].remove(part)
-                            st.rerun()
-        
-        with tab2:
-            st.markdown("##### Available parts:")
-            available = [p for p in available_parts if p not in st.session_state[key]]
-            if available:
-                cols = st.columns(3)
-                for idx, part in enumerate(available):
-                    col_idx = idx % 3
-                    with cols[col_idx]:
-                        if st.button(f"➕ {part}", key=f"{title}_add_{part}"):
-                            st.session_state[key].append(part)
-                            st.rerun()
-            else:
-                st.info("All parts have been added")
-
-        # Generate template
-        template_values = [self.part_mapping.get(part, part) for part in selected_parts]
-        template = "_".join(template_values)
-        
-        # Show preview
-        st.markdown("##### Template Preview")
-        st.code(template)
-        
-        if template:
-            st.markdown("##### Example Output")
-            example = template.replace("[SKU]", "ABC123").replace("match_type", "exact").replace("[KW]", "keyword")
-            st.code(example)
-        
-        return template
-
-    def get_campaign_settings(self) -> Tuple[Dict[str, Any], bool]:
-        """Get and validate campaign settings"""
-        has_error = False
-        settings = {}
-        
-        # Create columns for settings
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Campaign Name Template
-            available_parts = ["SKU", "AD TYPE", "MATCH TYPE", "START DATE", "ROOT GROUP", "KEYWORD"]
-            default_parts = ["SKU", "AD TYPE", "MATCH TYPE"]
-            
-            campaign_name_template = self._arrange_template_parts(
-                "Campaign Name Template",
-                available_parts,
-                default_parts
-            )
-            
-            # Ad Group Template
-            ag_available_parts = ["AG", "SKU", "MATCH TYPE", "START DATE", "ROOT GROUP", "KEYWORD"]
-            ag_default_parts = ["AG", "MATCH TYPE", "SKU"]
-            
-            ad_group_name_template = self._arrange_template_parts(
-                "Ad Group Name Template",
-                ag_available_parts,
-                ag_default_parts
-            )
-            
-            daily_budget = st.number_input(
-                "Daily Budget ($)",
-                min_value=1.0,
-                value=10.0,
-                help="Minimum daily budget is $1.00"
-            )
-            
-            start_date = st.date_input(
-                "Campaign Start Date",
-                min_value=datetime.today(),
-                help="Choose when your campaign should start"
-            )
-        
-        with col2:
-            match_types = st.multiselect(
-                "Select Match Types",
-                ["exact", "phrase", "broad"],
-                default=["exact"]
-            )
-            
-            bids = {}
-            for match_type in match_types:
-                bids[match_type] = st.number_input(
-                    f"Default bid for {match_type} match ($)",
-                    min_value=0.02,
-                    value=0.75
+                
+                enable_grouping = st.checkbox(
+                    "Enable SKU grouping",
+                    help="Group multiple SKUs into a single campaign"
                 )
+                
+                if enable_grouping:
+                    group_size = st.number_input(
+                        "SKUs per group",
+                        min_value=1,
+                        max_value=len(skus),
+                        value=min(3, len(skus))
+                    )
+                    
+                    if group_size:
+                        st.write("Preview of SKU groups:")
+                        groups = [skus[i:i + group_size] for i in range(0, len(skus), group_size)]
+                        for i, group in enumerate(groups, 1):
+                            with st.expander(f"Group {i}", expanded=i==1):
+                                st.write("\n".join(group))
         
-        # Create settings dictionary
-        settings = {
-            'campaign_name_template': campaign_name_template,
-            'ad_group_name_template': ad_group_name_template,
-            'daily_budget': daily_budget,
-            'start_date': start_date,
-            'match_types': match_types,
-            'bids': bids
-        }
-        
-        # Validate settings
-        valid, error = validate_campaign_settings(settings)
-        if not valid:
-            st.error(error)
-            has_error = True
-        
-        return settings, has_error
+        return skus, has_error, group_size
 
-    def generate_bulk_sheet(self, keywords: list, skus: list, settings: Dict[str, Any], group_size: int = None):
-        """Generate and display bulk sheet"""
+    def _display_bulk_sheet_results(self, df: pd.DataFrame):
+        """Display bulk sheet results including download buttons and preview"""
         try:
-            campaign_settings = CampaignSettings(
-                daily_budget=settings['daily_budget'],
-                start_date=settings['start_date'],
-                match_types=settings['match_types'],
-                bids=settings['bids'],
-                campaign_name_template=settings['campaign_name_template'],
-                ad_group_name_template=settings['ad_group_name_template'],
-                keyword_group_size=group_size
-            )
-            
-            df = self.generator.generate_bulk_sheet(keywords, skus, campaign_settings)
             preview_df = self.data_formatter.prepare_preview_data(df)
-            
             excel_path = self.file_handler.save_bulk_sheet(df, 'xlsx')
             csv_path = self.file_handler.save_bulk_sheet(df, 'csv')
             
@@ -362,7 +266,42 @@ class BulkCampaignApp:
                     )
             
             st.markdown("### 🔍 Preview")
-            st.dataframe(preview_df)
+            st.dataframe(preview_df, use_container_width=True)
+            
+        except Exception as e:
+            logger.error(f"Error displaying bulk sheet results: {str(e)}")
+            st.error(f"Error displaying bulk sheet results: {str(e)}")
+
+    def generate_bulk_sheet(self, keywords: list, skus: list, settings: Dict[str, Any], group_size: int = None):
+        """Generate bulk sheet"""
+        try:
+            campaign_settings = CampaignSettings(
+                daily_budget=settings['daily_budget'],
+                start_date=settings['start_date'],
+                match_types=settings['match_types'],
+                bids=settings['bids'],
+                campaign_name_template=settings['campaign_name_template'],
+                ad_group_name_template=settings['ad_group_name_template'],
+                keyword_group_size=group_size
+            )
+            
+            if st.session_state.get('sku_group_size'):
+                # Generate bulk sheets for each SKU group
+                sku_groups = [skus[i:i + st.session_state.sku_group_size] 
+                            for i in range(0, len(skus), st.session_state.sku_group_size)]
+                all_dfs = []
+                for sku_group in sku_groups:
+                    df = self.generator.generate_bulk_sheet(keywords, sku_group, campaign_settings)
+                    all_dfs.append(df)
+                
+                # Combine all dataframes
+                final_df = pd.concat(all_dfs, ignore_index=True)
+            else:
+                # Original behavior without SKU grouping
+                final_df = self.generator.generate_bulk_sheet(keywords, skus, campaign_settings)
+            
+            # Display results
+            self._display_bulk_sheet_results(final_df)
             
         except Exception as e:
             logger.error(f"Error generating bulk sheet: {str(e)}")
@@ -370,17 +309,95 @@ class BulkCampaignApp:
 
     def run(self):
         """Run the Streamlit application"""
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.title("Amazon Ads Bulk Campaign Generator 🎯")
-            st.markdown("Create properly formatted bulk sheets for Amazon Sponsored Products campaigns")
+        logger.info("Starting application")
+        logger.info(f"Current session state: {st.session_state}")
+        
+        # Show login page if not authenticated
+        if not st.session_state.get('authentication_status'):
+            logger.info("User not authenticated, showing login page")
+            st.markdown("""
+            ### Welcome to Amazon Ads Bulk Campaign Generator! 👋
+            
+            Choose one of the options below:
+            - **Existing Users**: Use the "Login" tab to access your account
+            - **New Users**: Use the "Register" tab to request access
+            - **Admin Access**: Use username `admin` to manage users and approve registrations
+            """)
+            
+            tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
+            
+            with tab1:
+                st.markdown("""
+                #### Login
+                If you already have an account or are an admin, please log in below.
+                
+                **Admin Login:**
+                - Username: `admin`
+                - Password: Contact system administrator
+                """)
+                
+                name, authentication_status, username = self.authenticator.login("Enter your credentials", "main")
+                logger.info(f"Login attempt - Status: {authentication_status}, Username: {username}")
+                
+                if authentication_status is False:
+                    logger.warning("Login failed - incorrect credentials")
+                    st.error('Username/password is incorrect')
+                elif authentication_status is None:
+                    logger.info("No login attempt yet")
+                    st.info('Please enter your credentials to access the app')
+                else:
+                    logger.info(f"Successful login for user: {username}")
+                    st.session_state['authentication_status'] = authentication_status
+                    st.session_state['name'] = name
+                    st.session_state['username'] = username
+                    st.rerun()
+            
+            with tab2:
+                self.show_registration_page()
+            
+            return
+        
+        # If authenticated, show logout in sidebar and welcome message
+        st.sidebar.success(f'Welcome *{st.session_state["name"]}*')
+        if self.authenticator.logout('Logout', 'sidebar'):
+            logger.info("User logged out")
+            st.rerun()
+        
+        # Admin features
+        if st.session_state['username'] == 'admin':
+            st.sidebar.markdown("---")
+            if st.sidebar.button("User Management"):
+                st.session_state['show_user_management'] = True
+                st.rerun()
+            if st.sidebar.button("Pending Approvals"):
+                st.session_state['show_approvals'] = True
+                st.rerun()
+        
+        # Show appropriate page based on state
+        if st.session_state.get('show_user_management', False) and st.session_state['username'] == 'admin':
+            self.show_user_management()
+            if st.sidebar.button("Back to Main App"):
+                st.session_state['show_user_management'] = False
+                st.rerun()
+        elif st.session_state.get('show_approvals', False) and st.session_state['username'] == 'admin':
+            self.show_pending_approvals()
+            if st.sidebar.button("Back to Main App"):
+                st.session_state['show_approvals'] = False
+                st.rerun()
+        else:
+            # Main app content
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.title("Amazon Ads Bulk Campaign Generator 🎯")
+                st.markdown("Create properly formatted bulk sheets for Amazon Sponsored Products campaigns")
         
         # Initialize session state
         if 'step' not in st.session_state:
             st.session_state.step = 1
             st.session_state.keywords = []
             st.session_state.skus = []
-            st.session_state.group_size = None
+            st.session_state.keyword_group_size = None
+            st.session_state.sku_group_size = None
         
         # Create two columns for Step 1
         if st.session_state.step == 1:
@@ -390,7 +407,7 @@ class BulkCampaignApp:
             with col1:
                 keywords, keywords_error, group_size = self.get_keywords_input()
             with col2:
-                skus, skus_error = self.get_skus_input()
+                skus, skus_error, sku_group_size = self.get_skus_input()
             
             # Navigation section with fixed position at bottom
             st.markdown("<br>", unsafe_allow_html=True)  # Add some space
@@ -408,7 +425,8 @@ class BulkCampaignApp:
                             # Store values in session state
                             st.session_state.keywords = keywords
                             st.session_state.skus = skus
-                            st.session_state.group_size = group_size
+                            st.session_state.keyword_group_size = group_size
+                            st.session_state.sku_group_size = sku_group_size
                             st.session_state.step = 2
                             st.rerun()
         
@@ -434,9 +452,14 @@ class BulkCampaignApp:
                             if 'keywords' not in st.session_state or 'skus' not in st.session_state:
                                 st.error("Keywords or SKUs not found. Please go back to Step 1.")
                                 return
+                            # Generate bulk sheet with both keyword and SKU grouping
                             self.generate_bulk_sheet(
                                 st.session_state.keywords,
                                 st.session_state.skus,
                                 settings,
-                                st.session_state.get('group_size')
+                                st.session_state.get('keyword_group_size')
                             )
+
+if __name__ == "__main__":
+    app = BulkCampaignApp()
+    app.run()
