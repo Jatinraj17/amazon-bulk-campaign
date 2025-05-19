@@ -333,14 +333,14 @@ class BulkCampaignApp:
         
         # Initialize session state
         if 'step' not in st.session_state:
-            st.session_state.step = 1
-            st.session_state.keywords = []
-            st.session_state.skus = []
-            st.session_state.keyword_group_size = None
-            st.session_state.sku_group_size = None
+            st.session_state['step'] = 1
+            st.session_state['keywords'] = []
+            st.session_state['skus'] = []
+            st.session_state['keyword_group_size'] = None
+            st.session_state['sku_group_size'] = None
         
         # Create two columns for Step 1
-        if st.session_state.step == 1:
+        if st.session_state['step'] == 1:
             st.header("Step 1: Enter Keywords and SKUs")
             
             col1, col2 = st.columns(2)
@@ -362,16 +362,16 @@ class BulkCampaignApp:
                     col1, col2, col3 = st.columns([1, 2, 1])
                     with col2:
                         if st.button("Continue to Campaign Settings ➡️", type="primary", use_container_width=True):
-                            # Store values in session state
-                            st.session_state.keywords = keywords
-                            st.session_state.skus = skus
-                            st.session_state.keyword_group_size = group_size
-                            st.session_state.sku_group_size = sku_group_size
-                            st.session_state.step = 2
+                            # Store values in session state using dictionary syntax
+                            st.session_state['keywords'] = keywords
+                            st.session_state['skus'] = skus
+                            st.session_state['keyword_group_size'] = group_size
+                            st.session_state['sku_group_size'] = sku_group_size
+                            st.session_state['step'] = 2
                             st.rerun()
         
         # Step 2: Campaign Settings
-        elif st.session_state.step == 2:
+        elif st.session_state['step'] == 2:
             st.header("Step 2: Configure Campaign Settings")
             settings, settings_error = self.get_campaign_settings()
             
@@ -383,7 +383,7 @@ class BulkCampaignApp:
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col1:
                     if st.button("⬅️ Back to Step 1", use_container_width=True):
-                        st.session_state.step = 1
+                        st.session_state['step'] = 1
                         st.rerun()
                 with col2:
                     if settings and not settings_error:
@@ -394,8 +394,8 @@ class BulkCampaignApp:
                                 return
                             # Generate bulk sheet with both keyword and SKU grouping
                             self.generate_bulk_sheet(
-                                st.session_state.keywords,
-                                st.session_state.skus,
+                                st.session_state['keywords'],
+                                st.session_state['skus'],
                                 settings,
                                 st.session_state.get('keyword_group_size')
                             )
