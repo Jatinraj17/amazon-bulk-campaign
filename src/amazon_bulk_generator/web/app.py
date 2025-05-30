@@ -23,14 +23,6 @@ logger = logging.getLogger(__name__)
 
 class BulkCampaignApp:
     def __init__(self):
-        # Set page config first to avoid Streamlit warnings
-        st.set_page_config(
-            page_title="Amazon Ads Bulk Campaign Generator",
-            page_icon="🎯",
-            layout="wide",
-            initial_sidebar_state="collapsed"  # Collapse sidebar for faster loading
-        )
-        
         # Cache expensive object initializations
         if 'generator' not in st.session_state:
             st.session_state.generator = BulkSheetGenerator()
