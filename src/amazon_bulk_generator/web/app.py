@@ -291,10 +291,10 @@ class BulkCampaignApp:
                 keyword_group_size=group_size
             )
             
-            if st.session_state.get('sku_group_size'):
+            if st.session_state.get('stored_sku_group_size'):
                 # Generate bulk sheets for each SKU group
-                sku_groups = [skus[i:i + st.session_state.sku_group_size] 
-                            for i in range(0, len(skus), st.session_state.sku_group_size)]
+                sku_groups = [skus[i:i + st.session_state.stored_sku_group_size] 
+                            for i in range(0, len(skus), st.session_state.stored_sku_group_size)]
                 all_dfs = []
                 for sku_group in sku_groups:
                     df = self.generator.generate_bulk_sheet(keywords, sku_group, campaign_settings)
@@ -356,12 +356,11 @@ class BulkCampaignApp:
                     col1, col2, col3 = st.columns([1, 2, 1])
                     with col2:
                         if st.button("Continue to Campaign Settings ➡️", type="primary", use_container_width=True):
-                            # Store values in session state using dictionary syntax
-                            st.session_state['keywords'] = keywords
-                            st.session_state['skus'] = skus
-                            st.session_state['keyword_group_size'] = keyword_group_size
-                            if sku_group_size is not None:
-                                st.session_state['sku_group_size'] = sku_group_size
+                            # Store values in session state using different keys to avoid widget conflicts
+                            st.session_state['stored_keywords'] = keywords
+                            st.session_state['stored_skus'] = skus
+                            st.session_state['stored_keyword_group_size'] = keyword_group_size
+                            st.session_state['stored_sku_group_size'] = sku_group_size
                             st.session_state['step'] = 2
                             st.rerun()
         
@@ -384,15 +383,15 @@ class BulkCampaignApp:
                     if settings and not settings_error:
                         if st.button("🎯 Generate Bulk Sheet", type="primary", use_container_width=True):
                             # Retrieve values from session state
-                            if 'keywords' not in st.session_state or 'skus' not in st.session_state:
+                            if 'stored_keywords' not in st.session_state or 'stored_skus' not in st.session_state:
                                 st.error("Keywords or SKUs not found. Please go back to Step 1.")
                                 return
                             # Generate bulk sheet with both keyword and SKU grouping
                             self.generate_bulk_sheet(
-                                st.session_state['keywords'],
-                                st.session_state['skus'],
+                                st.session_state['stored_keywords'],
+                                st.session_state['stored_skus'],
                                 settings,
-                                st.session_state.get('keyword_group_size')
+                                st.session_state.get('stored_keyword_group_size')
                             )
 
 if __name__ == "__main__":
