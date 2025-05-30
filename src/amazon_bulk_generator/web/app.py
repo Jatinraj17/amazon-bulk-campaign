@@ -223,23 +223,38 @@ class BulkCampaignApp:
                     key=f"bid_{match_type}"
                 )
         
-        # Create settings dictionary
-        settings = {
-            'campaign_name_template': "SP_[SKU]_match_type",
-            'ad_group_name_template': "AG_[SKU]_match_type",
-            'daily_budget': daily_budget,
-            'start_date': start_date,
-            'match_types': match_types,
-            'bids': bids
-        }
-        
-        # Validate settings
-        valid, error = validate_campaign_settings(settings)
-        if not valid:
-            st.error(error)
-            has_error = True
-        
-        return settings, has_error
+        # Create CampaignSettings object for validation
+        try:
+            campaign_settings = CampaignSettings(
+                campaign_name_template="SP_[SKU]_match_type",
+                ad_group_name_template="AG_[SKU]_match_type",
+                daily_budget=daily_budget,
+                start_date=start_date,
+                match_types=match_types,
+                bids=bids
+            )
+            
+            # Validate settings
+            valid, error = validate_campaign_settings(campaign_settings)
+            if not valid:
+                st.error(error)
+                has_error = True
+            
+            # Return as dictionary for compatibility
+            settings = {
+                'campaign_name_template': campaign_settings.campaign_name_template,
+                'ad_group_name_template': campaign_settings.ad_group_name_template,
+                'daily_budget': campaign_settings.daily_budget,
+                'start_date': campaign_settings.start_date,
+                'match_types': campaign_settings.match_types,
+                'bids': campaign_settings.bids
+            }
+            
+            return settings, has_error
+            
+        except Exception as e:
+            st.error(f"Error creating campaign settings: {str(e)}")
+            return {}, True
 
     def _display_bulk_sheet_results(self, df: pd.DataFrame):
         """Display bulk sheet results including download buttons and preview"""
