@@ -187,7 +187,24 @@ class BulkCampaignApp:
         """Get and validate campaign settings"""
         has_error = False
         
-        # Create columns for settings
+        # Campaign Name Template
+        st.subheader("Campaign Name Settings")
+        campaign_template = st.text_input(
+            "Campaign Name Template",
+            value="SP_[SKU]_match_type",
+            help="Use [SKU] and match_type as placeholders",
+            key="campaign_template"
+        )
+
+        # Ad Group Name Template
+        ad_group_template = st.text_input(
+            "Ad Group Name Template",
+            value="AG_[SKU]_match_type",
+            help="Use [SKU] and match_type as placeholders",
+            key="ad_group_template"
+        )
+
+        # Create columns for other settings
         col1, col2 = st.columns(2)
         
         with col1:
@@ -226,8 +243,8 @@ class BulkCampaignApp:
         # Create CampaignSettings object for validation
         try:
             campaign_settings = CampaignSettings(
-                campaign_name_template="SP_[SKU]_match_type",
-                ad_group_name_template="AG_[SKU]_match_type",
+                campaign_name_template=campaign_template,
+                ad_group_name_template=ad_group_template,
                 daily_budget=daily_budget,
                 start_date=start_date,
                 match_types=match_types,
