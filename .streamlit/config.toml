@@ -1,22 +1,16 @@
 [server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
 port = 8501
 address = "0.0.0.0"
-enableCORS = true
-enableXsrfProtection = true
-maxUploadSize = 200
-maxMessageSize = 200
-enableWebsocketCompression = true
-
-[browser]
-serverAddress = "localhost"
-gatherUsageStats = false
 
 [theme]
-primaryColor = "#2193b0"
-backgroundColor = "#f5f7fa"
-secondaryBackgroundColor = "#e4e7eb"
-textColor = "#232F3E"
+# Primary colors from eCommercean logo
+primaryColor = "#3B82F6"        # Light blue from logo for interactive elements
+backgroundColor = "#FFFFFF"      # Clean white background
+secondaryBackgroundColor = "#F0F5FF"  # Very light blue background
+textColor = "#0A2647"           # Deep navy blue from logo for text
 
-[client]
-toolbarMode = "minimal"
-showErrorDetails = true
+# Font configuration
+font = "sans-serif"

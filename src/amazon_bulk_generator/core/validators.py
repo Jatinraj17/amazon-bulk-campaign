@@ -19,6 +19,17 @@ DEFAULT_EMPTY_DICT = {}  # For dictionary operations
 VALIDATION_SUCCESS = (True, None)  # Standard success response
 VALIDATION_FAILURE = lambda msg: (False, msg)  # Standard failure response
 
+# Error messages
+NUMERIC_ERROR = "Invalid value for {}: must be greater than {}"
+INVALID_NUMBER_ERROR = "Invalid numeric value for {}"
+PAST_DATE_ERROR = "Start date cannot be in the past"
+EMPTY_LIST_ERROR = "No {} provided"
+EMPTY_ITEM_ERROR = "Empty value found in {}"
+LENGTH_ERROR = "Invalid length for {}: '{}' exceeds maximum length of {}"
+INVALID_CHARS_ERROR = "Invalid characters in {}: {}"
+TEMPLATE_LENGTH_ERROR = "{} exceeds maximum length"
+BID_ADJUSTMENT_RANGE_ERROR = "Bid adjustment must be between {}% and {}%"
+
 # Field names and formats
 DAILY_BUDGET_FIELD = "Daily budget"
 BID_FIELD_TEMPLATE = "Bid for {}"
@@ -56,6 +67,18 @@ SKU_PLACEHOLDER = "sku"
 TEMPLATE_NAME_FORMAT = "{} {}"  # For combining type and suffix
 PLACEHOLDER_SEPARATOR = ", "  # For joining placeholders in error messages
 LIST_SEPARATOR = ", "  # For joining list items in error messages
+CAMPAIGN_TEMPLATE_TYPE = "campaign"  # For template validation
+AD_GROUP_TEMPLATE_TYPE = "ad group"  # For template validation
+
+# Template parts
+VALID_TEMPLATE_PARTS = {
+    'SKU': '[SKU]',
+    'MATCH_TYPE': 'match_type',
+    'AD_TYPE': 'SP',
+    'ROOT': '[Root]',
+    'KEYWORD': '[KW]',
+    'AG': 'AG'
+}
 
 # Settings dictionary keys
 SETTINGS_MATCH_TYPES_KEY = "match_types"
@@ -257,16 +280,16 @@ def validate_bid_adjustment(value: str, placement: str) -> Tuple[bool, Optional[
     except ValueError:
         return VALIDATION_FAILURE(f'Invalid value: "{value}" for column: "{PERCENTAGE_FIELD}"')
 
-def validate_campaign_settings(settings: Dict) -> Tuple[bool, Optional[str]]:
+def validate_campaign_settings(settings) -> Tuple[bool, Optional[str]]:
     """Validate campaign settings"""
     # Validate match types
-    match_types_result = validate_match_types(settings.get(SETTINGS_MATCH_TYPES_KEY, DEFAULT_EMPTY_LIST))
+    match_types_result = validate_match_types(settings.match_types)
     if not match_types_result[0]:
         return match_types_result
     
     # Validate daily budget
     budget_result = validate_numeric_input(
-        settings[SETTINGS_DAILY_BUDGET_KEY], 
+        settings.daily_budget, 
         DAILY_BUDGET_FIELD,
         min_value=MIN_DAILY_BUDGET
     )
@@ -274,7 +297,7 @@ def validate_campaign_settings(settings: Dict) -> Tuple[bool, Optional[str]]:
         return budget_result
     
     # Validate bids
-    for match_type, bid in settings.get(SETTINGS_BIDS_KEY, DEFAULT_EMPTY_DICT).items():
+    for match_type, bid in settings.bids.items():
         bid_result = validate_numeric_input(
             bid, 
             BID_FIELD_TEMPLATE.format(match_type),
@@ -284,18 +307,27 @@ def validate_campaign_settings(settings: Dict) -> Tuple[bool, Optional[str]]:
             return bid_result
     
     # Validate bid adjustment and placement only if both values are provided
-    if (SETTINGS_BID_ADJUSTMENT_KEY in settings and settings[SETTINGS_BID_ADJUSTMENT_KEY] and 
-        SETTINGS_PLACEMENT_KEY in settings and settings[SETTINGS_PLACEMENT_KEY]):
+    if settings.bid_adjustment and settings.placement:
         adjustment_result = validate_bid_adjustment(
-            settings[SETTINGS_BID_ADJUSTMENT_KEY],
-            settings[SETTINGS_PLACEMENT_KEY]
+            settings.bid_adjustment,
+            settings.placement
         )
         if not adjustment_result[0]:
             return adjustment_result
     
     # Validate start date
-    date_result = validate_date(settings[SETTINGS_START_DATE_KEY])
+    date_result = validate_date(settings.start_date)
     if not date_result[0]:
         return date_result
+    
+    # Validate campaign name template
+    campaign_template_result = validate_name_template(settings.campaign_name_template, CAMPAIGN_TEMPLATE_TYPE)
+    if not campaign_template_result[0]:
+        return campaign_template_result
+    
+    # Validate ad group name template
+    ad_group_template_result = validate_name_template(settings.ad_group_name_template, AD_GROUP_TEMPLATE_TYPE)
+    if not ad_group_template_result[0]:
+        return ad_group_template_result
     
     return VALIDATION_SUCCESS

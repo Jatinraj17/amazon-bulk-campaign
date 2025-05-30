@@ -18,6 +18,7 @@ class CampaignSettings:
     ad_group_name_template: str = "AG_match_type_sku"
     placement: str = ""  # No default placement
     keyword_group_size: int = None  # New field for keyword grouping
+    sku_group_size: int = None  # New field for SKU grouping
 
 class BulkSheetGenerator:
     """Class to handle the generation of Amazon Ads bulk sheets"""
@@ -87,6 +88,18 @@ class BulkSheetGenerator:
             keyword_groups.append(group)
         return keyword_groups
 
+    def _group_skus(self, skus: List[str], group_size: int) -> List[List[str]]:
+        """Group SKUs into specified sizes"""
+        if not group_size or group_size <= 0:
+            return [[sku] for sku in skus]  # Each SKU in its own group
+        
+        # Split SKUs into groups of specified size
+        sku_groups = []
+        for i in range(0, len(skus), group_size):
+            group = skus[i:i + group_size]
+            sku_groups.append(group)
+        return sku_groups
+
     def generate_bulk_sheet(self, keywords: List[str], skus: List[str], settings: CampaignSettings) -> pd.DataFrame:
         """Generate bulk sheet from inputs"""
         rows = []
@@ -95,18 +108,22 @@ class BulkSheetGenerator:
         # Group keywords if group size is specified
         keyword_groups = self._group_keywords(keywords, settings.keyword_group_size)
         
-        for sku in skus:
+        # Group SKUs if group size is specified
+        sku_groups = self._group_skus(skus, settings.sku_group_size)
+        
+        for sku_group in sku_groups:
             for keyword_group in keyword_groups:
                 for match_type in settings.match_types:
-                    # Generate campaign rows for the entire keyword group
-                    group_rows = self._generate_campaign_rows(
-                        sku=sku,
-                        keywords=keyword_group,
-                        match_type=match_type.lower(),
-                        start_date=start_date,
-                        settings=settings
-                    )
-                    rows.extend(group_rows)
+                    for sku in sku_group:
+                        # Generate campaign rows for the entire keyword group
+                        group_rows = self._generate_campaign_rows(
+                            sku=sku,
+                            keywords=keyword_group,
+                            match_type=match_type.lower(),
+                            start_date=start_date,
+                            settings=settings
+                        )
+                        rows.extend(group_rows)
         
         df = pd.DataFrame(rows, columns=self.headers)
         return self._format_dataframe(df)

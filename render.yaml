@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: amazon-bulk-campaign
+    env: python
+    buildCommand: pip install -r requirements.txt && pip install -e .
+    startCommand: streamlit run streamlit_app.py --server.port=$PORT --server.enableCORS=false --server.address=0.0.0.0
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+    autoDeploy: true
+    # Health check to ensure the service is running
+    healthCheckPath: /_stcore/health
+    # Ensure the service has enough resources
+    plan: free

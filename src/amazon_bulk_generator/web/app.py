@@ -110,7 +110,7 @@ class BulkCampaignApp:
         
         return keywords, has_error, group_size
 
-    def get_skus_input(self) -> Tuple[list, bool]:
+    def get_skus_input(self) -> Tuple[list, bool, int]:
         """Get and validate SKUs input"""
         input_method = st.radio(
             "Choose input method for SKUs:",
@@ -120,6 +120,7 @@ class BulkCampaignApp:
         
         skus = []
         has_error = False
+        group_size = None
         
         if input_method == "Type/Paste":
             sample_data = self.file_handler.load_template_data('skus')
@@ -153,8 +154,28 @@ class BulkCampaignApp:
                 has_error = True
             else:
                 st.success(f"Successfully loaded {len(skus)} SKUs")
+                
+                enable_grouping = st.checkbox(
+                    "Enable SKU grouping",
+                    help="Group multiple SKUs into a single campaign"
+                )
+                
+                if enable_grouping:
+                    group_size = st.number_input(
+                        "SKUs per group",
+                        min_value=1,
+                        max_value=len(skus),
+                        value=min(3, len(skus))
+                    )
+                    
+                    if group_size:
+                        st.write("Preview of SKU groups:")
+                        groups = [skus[i:i + group_size] for i in range(0, len(skus), group_size)]
+                        for i, group in enumerate(groups, 1):
+                            with st.expander(f"Group {i}", expanded=i==1):
+                                st.write("\n".join(group))
         
-        return skus, has_error
+        return skus, has_error, group_size
 
     def _arrange_template_parts(self, title: str, available_parts: List[str], default_parts: List[str]) -> str:
         """Create a user-friendly interface for arranging template parts"""
@@ -245,10 +266,9 @@ class BulkCampaignApp:
         
         return template
 
-    def get_campaign_settings(self) -> Tuple[Dict[str, Any], bool]:
+    def get_campaign_settings(self) -> Tuple[CampaignSettings, bool]:
         """Get and validate campaign settings"""
         has_error = False
-        settings = {}
         
         # Create columns for settings
         col1, col2 = st.columns(2)
@@ -302,15 +322,17 @@ class BulkCampaignApp:
                     value=0.75
                 )
         
-        # Create settings dictionary
-        settings = {
-            'campaign_name_template': campaign_name_template,
-            'ad_group_name_template': ad_group_name_template,
-            'daily_budget': daily_budget,
-            'start_date': start_date,
-            'match_types': match_types,
-            'bids': bids
-        }
+        # Create CampaignSettings object
+        settings = CampaignSettings(
+            daily_budget=daily_budget,
+            start_date=start_date,
+            match_types=match_types,
+            bids=bids,
+            campaign_name_template=campaign_name_template,
+            ad_group_name_template=ad_group_name_template,
+            keyword_group_size=st.session_state.get('keyword_group_size'),
+            sku_group_size=st.session_state.get('sku_group_size')
+        )
         
         # Validate settings
         valid, error = validate_campaign_settings(settings)
@@ -320,20 +342,10 @@ class BulkCampaignApp:
         
         return settings, has_error
 
-    def generate_bulk_sheet(self, keywords: list, skus: list, settings: Dict[str, Any], group_size: int = None):
+    def generate_bulk_sheet(self, keywords: list, skus: list, settings: CampaignSettings):
         """Generate and display bulk sheet"""
         try:
-            campaign_settings = CampaignSettings(
-                daily_budget=settings['daily_budget'],
-                start_date=settings['start_date'],
-                match_types=settings['match_types'],
-                bids=settings['bids'],
-                campaign_name_template=settings['campaign_name_template'],
-                ad_group_name_template=settings['ad_group_name_template'],
-                keyword_group_size=group_size
-            )
-            
-            df = self.generator.generate_bulk_sheet(keywords, skus, campaign_settings)
+            df = self.generator.generate_bulk_sheet(keywords, skus, settings)
             preview_df = self.data_formatter.prepare_preview_data(df)
             
             excel_path = self.file_handler.save_bulk_sheet(df, 'xlsx')
@@ -369,8 +381,19 @@ class BulkCampaignApp:
 
     def run(self):
         """Run the Streamlit application"""
-        col1, col2 = st.columns([3, 1])
-        with col1:
+        # Create columns for logo and title
+        logo_col, title_col = st.columns([1, 4])
+        
+        # Display logo in the first column
+        with logo_col:
+            try:
+                st.image("assets/images/logo.avif", width=150)
+            except Exception:
+                # Suppress logo loading warning message
+                pass
+        
+        # Display title in the second column
+        with title_col:
             st.title("Amazon Ads Bulk Campaign Generator 🎯")
             st.markdown("Create properly formatted bulk sheets for Amazon Sponsored Products campaigns")
         
@@ -387,9 +410,9 @@ class BulkCampaignApp:
             
             col1, col2 = st.columns(2)
             with col1:
-                keywords, keywords_error, group_size = self.get_keywords_input()
+                keywords, keywords_error, keyword_group_size = self.get_keywords_input()
             with col2:
-                skus, skus_error = self.get_skus_input()
+                skus, skus_error, sku_group_size = self.get_skus_input()
             
             # Navigation section with fixed position at bottom
             st.markdown("<br>", unsafe_allow_html=True)  # Add some space
@@ -407,7 +430,8 @@ class BulkCampaignApp:
                             # Store values in session state
                             st.session_state.keywords = keywords
                             st.session_state.skus = skus
-                            st.session_state.group_size = group_size
+                            st.session_state.keyword_group_size = keyword_group_size
+                            st.session_state.sku_group_size = sku_group_size
                             st.session_state.step = 2
                             st.rerun()
         
@@ -433,9 +457,23 @@ class BulkCampaignApp:
                             if 'keywords' not in st.session_state or 'skus' not in st.session_state:
                                 st.error("Keywords or SKUs not found. Please go back to Step 1.")
                                 return
+                            
+                            # Create CampaignSettings object
+                            campaign_settings = CampaignSettings(
+                                daily_budget=settings.daily_budget,
+                                start_date=settings.start_date,
+                                match_types=settings.match_types,
+                                bids=settings.bids,
+                                campaign_name_template=settings.campaign_name_template,
+                                ad_group_name_template=settings.ad_group_name_template,
+                                keyword_group_size=settings.keyword_group_size,
+                                sku_group_size=settings.sku_group_size,
+                                bid_adjustment=settings.bid_adjustment,
+                                placement=settings.placement
+                            )
+                            
                             self.generate_bulk_sheet(
                                 st.session_state.keywords,
                                 st.session_state.skus,
-                                settings,
-                                st.session_state.get('group_size')
+                                campaign_settings
                             )
