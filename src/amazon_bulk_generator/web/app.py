@@ -169,12 +169,8 @@ class BulkCampaignApp:
                 
                 enable_grouping = st.checkbox(
                     "Enable SKU grouping",
-<<<<<<< HEAD
-                    help="Group multiple SKUs into a single campaign"
-=======
                     help="Group multiple SKUs into a single campaign",
                     key="enable_sku_grouping"
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
                 )
                 
                 if enable_grouping:
@@ -182,12 +178,8 @@ class BulkCampaignApp:
                         "SKUs per group",
                         min_value=1,
                         max_value=len(skus),
-<<<<<<< HEAD
-                        value=min(3, len(skus))
-=======
                         value=min(3, len(skus)),
                         key="sku_group_size"
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
                     )
                     
                     if group_size:
@@ -198,100 +190,8 @@ class BulkCampaignApp:
                                 st.write("\n".join(group))
         
         return skus, has_error, group_size
-<<<<<<< HEAD
 
-    def _arrange_template_parts(self, title: str, available_parts: List[str], default_parts: List[str]) -> str:
-        """Create a user-friendly interface for arranging template parts"""
-        st.markdown(f"### 📝 {title}")
-        
-        # Initialize session state
-        key = f"{title}_selected_parts"
-        if key not in st.session_state:
-            st.session_state[key] = default_parts.copy()
-        
-        # Add custom text input
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            custom_text = st.text_input(
-                "Add custom text",
-                key=f"{title}_custom",
-                help="Only letters, numbers, hyphens, and underscores"
-            )
-        with col2:
-            if custom_text:
-                if not re.match(r'^[a-zA-Z0-9_-]+$', custom_text):
-                    st.error("Invalid characters")
-                elif st.button("Add", key=f"{title}_add_custom"):
-                    if custom_text not in st.session_state[key]:
-                        st.session_state[key].append(custom_text)
-                        st.rerun()
-
-        # Create tabs
-        tab1, tab2 = st.tabs(["Arrange Parts", "Add Parts"])
-        
-        with tab1:
-            st.markdown("##### Current Parts:")
-            selected_parts = st.session_state[key]
-            
-            # Create reorderable list
-            for i, part in enumerate(selected_parts):
-                col1, col2, col3 = st.columns([0.1, 0.8, 0.1])
-                with col1:
-                    if i > 0:
-                        if st.button("↑", key=f"{title}_up_{i}"):
-                            selected_parts[i], selected_parts[i-1] = selected_parts[i-1], selected_parts[i]
-                            st.rerun()
-                with col2:
-                    st.info(part)
-                with col3:
-                    if i < len(selected_parts) - 1:
-                        if st.button("↓", key=f"{title}_down_{i}"):
-                            selected_parts[i], selected_parts[i+1] = selected_parts[i+1], selected_parts[i]
-                            st.rerun()
-            
-            # Remove buttons
-            if selected_parts:
-                st.markdown("##### Remove parts:")
-                cols = st.columns(4)
-                for idx, part in enumerate(selected_parts):
-                    col_idx = idx % 4
-                    with cols[col_idx]:
-                        if st.button(f"❌ {part}", key=f"{title}_remove_{part}"):
-                            st.session_state[key].remove(part)
-                            st.rerun()
-        
-        with tab2:
-            st.markdown("##### Available parts:")
-            available = [p for p in available_parts if p not in st.session_state[key]]
-            if available:
-                cols = st.columns(3)
-                for idx, part in enumerate(available):
-                    col_idx = idx % 3
-                    with cols[col_idx]:
-                        if st.button(f"➕ {part}", key=f"{title}_add_{part}"):
-                            st.session_state[key].append(part)
-                            st.rerun()
-            else:
-                st.info("All parts have been added")
-
-        # Generate template
-        template_values = [self.part_mapping.get(part, part) for part in selected_parts]
-        template = "_".join(template_values)
-        
-        # Show preview
-        st.markdown("##### Template Preview")
-        st.code(template)
-        
-        if template:
-            st.markdown("##### Example Output")
-            example = template.replace("[SKU]", "ABC123").replace("match_type", "exact").replace("[KW]", "keyword")
-            st.code(example)
-        
-        return template
-=======
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
-
-    def get_campaign_settings(self) -> Tuple[CampaignSettings, bool]:
+    def get_campaign_settings(self) -> Tuple[Dict[str, Any], bool]:
         """Get and validate campaign settings"""
         has_error = False
         
@@ -331,19 +231,6 @@ class BulkCampaignApp:
                     key=f"bid_{match_type}"
                 )
         
-<<<<<<< HEAD
-        # Create CampaignSettings object
-        settings = CampaignSettings(
-            daily_budget=daily_budget,
-            start_date=start_date,
-            match_types=match_types,
-            bids=bids,
-            campaign_name_template=campaign_name_template,
-            ad_group_name_template=ad_group_name_template,
-            keyword_group_size=st.session_state.get('keyword_group_size'),
-            sku_group_size=st.session_state.get('sku_group_size')
-        )
-=======
         # Create settings dictionary
         settings = {
             'campaign_name_template': "SP_[SKU]_match_type",
@@ -353,7 +240,6 @@ class BulkCampaignApp:
             'match_types': match_types,
             'bids': bids
         }
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
         
         # Validate settings
         valid, error = validate_campaign_settings(settings)
@@ -363,16 +249,9 @@ class BulkCampaignApp:
         
         return settings, has_error
 
-<<<<<<< HEAD
-    def generate_bulk_sheet(self, keywords: list, skus: list, settings: CampaignSettings):
-        """Generate and display bulk sheet"""
-        try:
-            df = self.generator.generate_bulk_sheet(keywords, skus, settings)
-=======
     def _display_bulk_sheet_results(self, df: pd.DataFrame):
         """Display bulk sheet results including download buttons and preview"""
         try:
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
             preview_df = self.data_formatter.prepare_preview_data(df)
             excel_path = self.file_handler.save_bulk_sheet(df, 'xlsx')
             csv_path = self.file_handler.save_bulk_sheet(df, 'csv')
@@ -444,26 +323,8 @@ class BulkCampaignApp:
 
     def run(self):
         """Run the Streamlit application"""
-<<<<<<< HEAD
-        # Create columns for logo and title
-        logo_col, title_col = st.columns([1, 4])
-        
-        # Display logo in the first column
-        with logo_col:
-            try:
-                st.image("assets/images/logo.avif", width=150)
-            except Exception:
-                # Suppress logo loading warning message
-                pass
-        
-        # Display title in the second column
-        with title_col:
-            st.title("Amazon Ads Bulk Campaign Generator 🎯")
-            st.markdown("Create properly formatted bulk sheets for Amazon Sponsored Products campaigns")
-=======
         logger.info("Starting application")
         logger.info(f"Current session state: {st.session_state}")
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
         
         # Main app content
         st.title("Amazon Ads Bulk Campaign Generator 🎯")
@@ -503,22 +364,13 @@ class BulkCampaignApp:
                     col1, col2, col3 = st.columns([1, 2, 1])
                     with col2:
                         if st.button("Continue to Campaign Settings ➡️", type="primary", use_container_width=True):
-<<<<<<< HEAD
-                            # Store values in session state
-                            st.session_state.keywords = keywords
-                            st.session_state.skus = skus
-                            st.session_state.keyword_group_size = keyword_group_size
-                            st.session_state.sku_group_size = sku_group_size
-                            st.session_state.step = 2
-=======
                             # Store values in session state using dictionary syntax
                             st.session_state['keywords'] = keywords
                             st.session_state['skus'] = skus
-                            st.session_state['keyword_group_size'] = group_size
+                            st.session_state['keyword_group_size'] = keyword_group_size
                             if sku_group_size is not None:
                                 st.session_state['sku_group_size'] = sku_group_size
                             st.session_state['step'] = 2
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
                             st.rerun()
         
         # Step 2: Campaign Settings
@@ -543,34 +395,12 @@ class BulkCampaignApp:
                             if 'keywords' not in st.session_state or 'skus' not in st.session_state:
                                 st.error("Keywords or SKUs not found. Please go back to Step 1.")
                                 return
-<<<<<<< HEAD
-                            
-                            # Create CampaignSettings object
-                            campaign_settings = CampaignSettings(
-                                daily_budget=settings.daily_budget,
-                                start_date=settings.start_date,
-                                match_types=settings.match_types,
-                                bids=settings.bids,
-                                campaign_name_template=settings.campaign_name_template,
-                                ad_group_name_template=settings.ad_group_name_template,
-                                keyword_group_size=settings.keyword_group_size,
-                                sku_group_size=settings.sku_group_size,
-                                bid_adjustment=settings.bid_adjustment,
-                                placement=settings.placement
-                            )
-                            
-                            self.generate_bulk_sheet(
-                                st.session_state.keywords,
-                                st.session_state.skus,
-                                campaign_settings
-=======
                             # Generate bulk sheet with both keyword and SKU grouping
                             self.generate_bulk_sheet(
                                 st.session_state['keywords'],
                                 st.session_state['skus'],
                                 settings,
                                 st.session_state.get('keyword_group_size')
->>>>>>> c6dbb4e7231ea285e8f3a130023c8f25efd31b32
                             )
 
 if __name__ == "__main__":
